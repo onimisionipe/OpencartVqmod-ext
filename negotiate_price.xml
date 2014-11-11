@@ -1,0 +1,408 @@
+<modification>
+    <id> Negotiate Price Module</id>
+    <version>0.2</version>
+    <vqmver>2.3.2</vqmver>
+    <author> Mathieu Onipe - onimisionipe@gmail.com</author>
+    
+    <file name="admin/language/english/catalog/product.php">
+  <operation>
+    <search position="after"><![CDATA[
+    $_['text_option']            = 'Option';
+    ]]></search>
+    <add trim="true"><![CDATA[
+    $_['opt_negotiate']      = 'Add Negotatiate Price Option';
+    $_['opt_negotiate_all'] = 'Use for all product in this product\'s category';
+        
+    
+		]]></add>
+  </operation>
+</file>
+
+<file name="admin/model/catalog/product.php">
+    <operation>
+        <search position="before">
+            <![CDATA[
+           public function getProductCategories($product_id) {
+            ]]>
+            </search>
+            <add trim="true"><![CDATA[ 
+               public function getNegotiatePriceOption($product_id){
+                $query = $this->db->query("SELECT * FROM ".DB_PREFIX . "negotiate_price WHERE product_id = '".(int)$product_id . "'");
+                if($query->num_rows>0){
+ 
+		return $query->row;
+                } else {
+                return false;
+}
+                            
+}
+          
+
+]]>
+        </add> 
+        
+    </operation>
+    
+    <operation>
+        <search position="before" index="1">
+            <![CDATA[ 
+            if (isset($data['product_layout'])) {
+]]>
+            
+        </search>
+        <add trim="true"><![CDATA[
+            if(isset($data['negotiate_price'])) {
+            $this->db->query("INSERT INTO ".DB_PREFIX."negotiate_price SET product_id='".(int)$product_id . "', display_negotiate='".$data['negotiate_price']."'");
+            
+            }
+         ]]>   
+        </add>
+        
+    </operation>
+    
+    <operation>
+        <search position="after"><![CDATA[ 
+$data = array_merge($data, array('product_profiles' => $this->getProfiles($product_id)));
+]]>            
+        </search>
+        <add trim="true"><![CDATA[ 
+        $negotiate = $this->getNegotiatePriceOption($product_id);
+            $data['negotiate_price'] = $negotiate['display_negotiate'];
+            
+]]>
+  </add>
+    </operation>
+    
+    <operation>
+        <search position="after">
+            <![CDATA[ 
+$this->db->query("DELETE FROM " . DB_PREFIX . "review WHERE product_id = '" . (int)$product_id . "'");
+]]>
+            
+        </search>
+        <add trim="true"><![CDATA[ 
+           $this->db->query("DELETE FROM " . DB_PREFIX . "negotiate_price WHERE product_id = '" . (int)$product_id . "'"); 
+            
+       ]]> </add>
+    </operation>
+    
+    
+    <operation>
+        <search position="before">
+            <![CDATA[
+           public function copyProduct($product_id) {
+            ]]>
+            </search>
+            <add trim="true"><![CDATA[ 
+               public function setNegotiatePriceOption($product_id, $negotiate_price, $negotiate_all, $product_cat){
+                if($negotiate_all === false){
+                
+                $query = $this->db->query("SELECT * FROM ".DB_PREFIX. "negotiate_price WHERE product_id='".(int)$product_id . "'");
+                if($query->num_rows<1){ 
+                $this->db->query("INSERT INTO ".DB_PREFIX."negotiate_price SET product_id='".(int)$product_id . "', display_negotiate='".$negotiate_price ."'");
+} else {
+   $this->db->query("UPDATE ".DB_PREFIX."negotiate_price SET display_negotiate='".$negotiate_price."' WHERE product_id='".(int)$product_id."'");             
+}
+              
+} else {
+               
+   //perform multiproduct add in one category - the first category in the list of category
+                $firstcat = $product_cat[0];
+                $populate = array();
+                $query2 = $this->db->query("SELECT product_id FROM " . DB_PREFIX ."product_to_category WHERE category_id = '" . $firstcat . "'");
+                
+            if($query2->num_rows>0){
+                
+                foreach($query2->rows as $row){
+                    $populate[] = $row['product_id'];
+                                                    
+                }
+                  
+            }
+                if(sizeof($populate)<1){
+            return false;
+            
+        }
+          foreach ($populate as $enter) {
+                
+            
+            $check2 = $this->db->query("SELECT * FROM ". DB_PREFIX . "negotiate_price WHERE product_id='".(int)$enter."'");
+            
+            if($check2->num_rows < 1) {
+            $this->db->query("INSERT INTO ". DB_PREFIX . "negotiate_price SET product_id='".(int)$enter . "', display_negotiate='".$negotiate_price ."'");
+        
+            } else {
+               $this->db->query("DELETE FROM ". DB_PREFIX . "negotiate_price WHERE product_id='".(int)$enter."'");
+               $this->db->query("INSERT INTO ". DB_PREFIX . "negotiate_price SET product_id='".(int)$enter . "', display_negotiate='".$negotiate_price ."'");
+            }
+        }      
+           
+}
+}
+]]>
+        </add> 
+        
+    </operation>
+    
+    
+</file>
+
+<file name="admin/controller/catalog/product.php">
+    
+    
+    <operation>
+        <search position="after">
+            <![CDATA[ 
+$this->data['entry_price'] = $this->language->get('entry_price');
+]]>
+            
+        </search>
+        <add trim="true">
+            <![CDATA[ 
+    $this->data['opt_negotiate']      = $this->language->get('opt_negotiate');
+    $this->data['opt_negotiate_all']      = $this->language->get('opt_negotiate_all');
+    
+]]>
+            
+        </add>
+    </operation>
+    <operation>
+        <search position="after">
+            <![CDATA[
+$this->model_catalog_product->editProduct($this->request->get['product_id'], $this->request->post);
+]]>
+            
+        </search>
+        <add trim="true">
+            <![CDATA[ 
+if(isset($this->request->post['negotiate_all'])) {
+
+        $this->model_catalog_product->setNegotiatePriceOption($this->request->get['product_id'],(isset($this->request->post['negotiate_price']))?1:0,$this->request->post['negotiate_all'], $this->request->post['product_category']);    
+} else {
+
+$this->model_catalog_product->setNegotiatePriceOption($this->request->get['product_id'],(isset($this->request->post['negotiate_price']))?1:0,false, $this->request->post['product_category']);    
+}
+]]>
+            
+        </add>
+    </operation>
+    
+    <operation>
+        <search position="after">
+            <![CDATA[
+$product_info = $this->model_catalog_product->getProduct($this->request->get['product_id']);
+]]>
+            
+        </search>
+        <add trim="true">
+            <![CDATA[ 
+            $negotiate2 = $this->model_catalog_product->getNegotiatePriceOption($this->request->get['product_id']);
+
+]]>
+        </add>
+    </operation>    
+    
+    
+    <operation>
+        <search position="after">
+            <![CDATA[
+$this->data['languages'] = $this->model_localisation_language->getLanguages();
+]]>
+            
+        </search>
+        <add trim="true">
+            <![CDATA[ 
+            if (isset($this->request->post['negotiate_price'])) {
+			$this->data['negotiate_price'] = $this->request->post['negotiate_price'];
+                        $this->data['negotiate_all'] = $this->request->post['negotiate_all'];
+                        
+                        
+		} elseif ($negotiate2!==false) {
+			$this->data['negotiate_price'] = $negotiate2['display_negotiate'];
+                        
+		} else {
+			$this->data['negotiate_price'] = '';
+		}
+
+]]>
+        </add>
+    </operation>    
+    
+</file>
+
+<file name="admin/view/template/catalog/product_form.tpl">
+    <operation>
+        <search position="before">
+            <![CDATA[
+             
+<td><?php echo $entry_sku; ?></td>]]>
+            
+        </search>
+        <add trim="true">
+            <![CDATA[ 
+            
+                <td><?php echo $opt_negotiate; ?></td>
+                <td><input type="checkbox" name="negotiate_price" value="1" <?php if($negotiate_price==1){ echo "checked";} ?> /></td>
+                <td><?php echo $opt_negotiate_all; ?></td>
+                <td><input type="checkbox" name="negotiate_all" value="1" /></td>
+                
+            
+]]>
+        </add>
+        
+    </operation>
+    
+</file>
+
+<file name="catalog/language/english/product/product.php">
+    <operation>
+        <search position="after">
+            <![CDATA[ 
+            $_['text_model']        = 'Product Code:';
+]]>
+        </search>
+        <add trim="true">
+            <![CDATA[ 
+            $_['text_opt_negotiate'] = '<a onclick="chatWithUs();" style="#3498db;font-size:16px;">Chat with us to negotiate price</a><br/>';
+]]>
+            
+        </add>
+    </operation>
+    
+</file>
+
+
+<file name="catalog/model/catalog/product.php">
+    <operation>
+        <search position="before">
+            <![CDATA[
+           public function getProduct($product_id) {
+            ]]>
+            </search>
+            <add trim="true"><![CDATA[ 
+               public function getNegotiatePriceOption($product_id){
+                $query = $this->db->query("SELECT * FROM ".DB_PREFIX . "negotiate_price WHERE product_id = '".(int)$product_id . "'");
+                if($query->num_rows>0){
+ 
+		return $query->row;
+                } else {
+                return false;
+}
+                            
+}
+          
+
+]]>
+        </add> 
+        
+    </operation> 
+</file>
+
+<file name="catalog/controller/product/product.php">
+    <operation>
+        <search position="after" index="1">
+            <![CDATA[ 
+$product_info = $this->model_catalog_product->getProduct($product_id);
+]]>
+            
+        </search>
+        <add trim="true">
+            <![CDATA[ 
+            $negotiate3 = $this->model_catalog_product->getNegotiatePriceOption($product_id);
+]]>
+        </add>
+    </operation>
+    
+    <operation>
+        <search position="after">
+            <![CDATA[ 
+            $this->data['text_price'] = $this->language->get('text_price');
+]]>
+            
+        </search>
+        <add trim="true">
+            <![CDATA[ 
+            if($negotiate3 !== false && $negotiate3['display_negotiate'] != 0){
+            $this->data['negotiate_price'] = $negotiate3['display_negotiate'];
+            
+            //load languages
+            $this->data['text_opt_negotiate'] = $this->language->get('text_opt_negotiate');
+                       
+           }  
+]]>
+            
+        </add>
+    </operation>
+    
+</file>
+
+<file name="catalog/view/theme/default/template/product/product.tpl">
+    <operation>
+        <search position="before"><![CDATA[ 
+        <?php if ($discounts) { ?>
+]]>
+      </search>
+      <add trim="true">
+          <![CDATA[ 
+          
+<?php if($negotiate_price==1) {
+
+?>
+<br/>
+<?php echo $text_opt_negotiate; ?>
+
+<?php } ?>
+]]>
+          
+      </add>
+    </operation>
+    <operation>
+        <search position="before" index="1"><![CDATA[ 
+<div class="moreinfo">
+]]>
+        
+        </search>
+        <add trim="true">
+            <![CDATA[ 
+            <?php if($negotiate_price==1) {
+            ?>
+            <script type="text/javascript">
+	function chatWithUs(){
+        
+		
+			// Toggle the slide based on its current visibility.
+			if ($('#slidingchat_inner').is( ":visible" )) {
+				// Hide - slide up.
+				$('#slidingchat_inner').slideUp(400, function(){ 
+					$('#slidingchat_trigger1').slideDown(500);
+					$('#slidingchat_trigger2').css({'background':'url(image/data/zohobar-max.png) no-repeat'});
+				}); 
+			} else {
+				// Show - slide down.
+				$('#slidingchat_inner').slideDown(400, function(){ 
+					// Load iframe
+					if ($('#slidingchat_frame').attr('src') === '') {
+						$('#slidingchat_frame').attr('src', ' http://chat.zoho.com/csupport.sas?k=77080d81134bbfa9ba27b6ebc533d5e68b359e6b92836665891d0844b962491e&chaturl=Builders%20station%20Support1&V=000000-70a9e1-eff4f9-70a9e1-Support&uamsg=Support+representative+is+not+available&amsg=Sorry+Support+team+is+unavailable.+Please+try+again+later&wmsg=+Please+wait%2C+someone+will+be+with+you+shortly...&notify=both');
+					}
+					$('#slidingchat_trigger1').slideUp(500);
+					$('#slidingchat_trigger2').css({'background':'url(image/data/zohobar-min.png) no-repeat'});
+				});
+			}
+	
+	}
+</script>
+            <br/>
+            <br/>
+            <?php } ?>
+]]>
+            
+        </add>
+    </operation>
+    
+       
+</file>
+
+
+
+
+</modification>
